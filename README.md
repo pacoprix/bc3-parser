@@ -1,58 +1,89 @@
-# bc3-parser
+# BC3 Parser Microservice
 
-This project uses Quarkus, the Supersonic Subatomic Java Framework.
+A Quarkus-based microservice that parses BC3 construction budget files and returns structured JSON data.
 
-If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
+## Overview
 
-## Running the application in dev mode
+This service accepts BC3 files (FIEBDC-3 format) commonly used in the construction industry for budget management, parses them using a Python backend, and returns a hierarchical JSON structure with all budget items, measurements, and decompositions.
 
-You can run your application in dev mode that enables live coding using:
+## Features
 
-```shell script
-./mvnw quarkus:dev
+- **RESTful API** for BC3 file upload and parsing
+- **Python-based parser** that extracts:
+  - Hierarchical budget structure (chapters, subcapters, items)
+  - Concepts with codes, units, descriptions, and prices
+  - Measurements and quantities
+  - Cost decompositions
+- **Tree pruning** - removes branches without quantities
+- **Automatic code renumbering** based on hierarchy
+- **Large file support** (up to 50MB)
+- **Virtual threads** for improved concurrency
+
+## API Endpoints
+
+### Parse BC3 File
+```bash
+POST /parse/bc3
+Content-Type: multipart/form-data
+
+curl -X POST -F 'file=@path/to/file.bc3' http://localhost:8080/parse/bc3
 ```
 
-> **_NOTE:_**  Quarkus now ships with a Dev UI, which is available in dev mode only at <http://localhost:8080/q/dev/>.
+**Response**: JSON tree structure with:
+- `codigo_decimal`: Hierarchical code (e.g., "01.02.03")
+- `codigo`: Original BC3 code
+- `naturaleza`: Node type (0=root, 1=chapter, 2=subchapter, 3=item)
+- `unidad`: Unit of measurement
+- `resumen`: Short description
+- `descripcion_larga`: Full description
+- `cantidad`: Quantity
+- `precio`: Unit price
+- `importe`: Total amount (cantidad × precio)
+- `hijos`: Array of child nodes
 
-## Packaging and running the application
+### Health Check
+```bash
+GET /parse/bc3
 
-The application can be packaged using:
-
-```shell script
-./mvnw package
+curl http://localhost:8080/parse/bc3
 ```
 
-It produces the `quarkus-run.jar` file in the `target/quarkus-app/` directory.
-Be aware that it’s not an _über-jar_ as the dependencies are copied into the `target/quarkus-app/lib/` directory.
+## Running the Service
 
-The application is now runnable using `java -jar target/quarkus-app/quarkus-run.jar`.
-
-If you want to build an _über-jar_, execute the following command:
-
-```shell script
-./mvnw package -Dquarkus.package.jar.type=uber-jar
+### Development Mode
+```bash
+mvn quarkus:dev
 ```
 
-The application, packaged as an _über-jar_, is now runnable using `java -jar target/*-runner.jar`.
-
-## Creating a native executable
-
-You can create a native executable using:
-
-```shell script
-./mvnw package -Dnative
+### Production Build
+```bash
+mvn package
+java -jar target/quarkus-app/quarkus-run.jar
 ```
 
-Or, if you don't have GraalVM installed, you can run the native executable build in a container using:
+## Requirements
 
-```shell script
-./mvnw package -Dnative -Dquarkus.native.container-build=true
+- Java 24+
+- Python 3.x
+- Maven 3.8+
+
+## Configuration
+
+Edit `src/main/resources/application.properties`:
+
+```properties
+# Python parser configuration
+bc3.parser.python.path=python3
+bc3.parser.script.path=src/main/python/parser_wrapper.py
+bc3.parser.timeout.seconds=300
+
+# File upload limits
+quarkus.http.limits.max-body-size=50M
 ```
 
-You can then execute your native executable with: `./target/bc3-parser-1.0.0-SNAPSHOT-runner`
+## Technology Stack
 
-If you want to learn more about building native executables, please consult <https://quarkus.io/guides/maven-tooling>.
-
-## Related Guides
-
-- REST Jackson ([guide](https://quarkus.io/guides/rest#json-serialisation)): Jackson serialization support for Quarkus REST. This extension is not compatible with the quarkus-resteasy extension, or any of the extensions that depend on it
+- **Quarkus** - Supersonic Subatomic Java Framework
+- **RESTEasy Reactive** - JAX-RS implementation
+- **Jackson** - JSON processing
+- **Python 3** - BC3 parsing logic
